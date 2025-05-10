@@ -2,19 +2,38 @@ import React, { useState } from "react";
 import { Box, Button, TextField, Typography, Paper } from "@mui/material";
 import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 import DownloadIcon from "@mui/icons-material/Download";
-import * as mammoth from "mammoth"; // Import mammoth to handle DOCX parsing
-import PizZip from "pizzip"; // For manipulating DOCX files
-import Docxtemplater from "docxtemplater"; // For creating DOCX files
-import { saveAs } from "file-saver"; // To save the generated DOCX file
+import * as mammoth from "mammoth";
+import { saveAs } from "file-saver";
+import axios from "axios";
+import CircularProgress from "@mui/material/CircularProgress";
+import { Document, Packer, Paragraph, TextRun } from "docx";
+
 
 const TextSummarizer = () => {
-  const [text, setText] = useState(""); // State for input text
-  const [summary, setSummary] = useState(""); // State for the summary text
+  const [text, setText] = useState("");
+  const [summary, setSummary] = useState(""); 
+  const [loading, setLoading] = useState(false);
 
-  const handleSummarize = () => {
-    // Hardcoded summary text for demo
-    const hardcodedSummary = "Initialize Google Maps matrix data with 100 vertices and edges in Ho Chi Minh City. Implement Dijkstra, Bellman-Ford, and Floyd-Warshall algorithms, randomly select vertex pairs, output 3 shortest paths, visualize, and compare results with actual Google data.";
-    setSummary(hardcodedSummary); // Set the hardcoded summary
+  const handleSummarize = async () => {
+    if (!text.trim()) {
+      alert("Please enter some text to summarize.");
+      return;
+    }
+
+    setLoading(true); 
+
+    try {
+      const response = await axios.post("http://127.0.0.1:5000/summarize", {
+        text: text
+      });
+
+      setSummary(response.data.summary);
+    } catch (error) {
+      console.error("Error calling summarization API:", error);
+      alert("Failed to summarize the text. Please try again.");
+    } finally {
+      setLoading(false); 
+    }
   };
 
   const handleUpload = (e) => {
@@ -22,50 +41,58 @@ const TextSummarizer = () => {
     if (file && file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
       const reader = new FileReader();
       reader.onload = (event) => {
-        // Parse the DOCX file using Mammoth
         mammoth.extractRawText({ arrayBuffer: event.target.result })
           .then((result) => {
-            setText(result.value); // Set the extracted text
+            setText(result.value); 
           })
           .catch((err) => {
             console.error("Error parsing DOCX file", err);
           });
       };
-      reader.readAsArrayBuffer(file); // Read file as ArrayBuffer to be processed by Mammoth
+      reader.readAsArrayBuffer(file); 
     } else {
       alert("Please upload a valid DOCX file.");
     }
   };
 
-  const handleExport = () => {
-    const doc = new Docxtemplater();
-    const zip = new PizZip();
+  const handleExport = async () => {
+    if (!summary.trim()) {
+      alert("No summary available to export.");
+      return;
+    }
 
-    // Hardcoded summary text for DOCX export
-    const hardcodedSummary = "Initialize Google Maps matrix data with 100 vertices and edges in Ho Chi Minh City. Implement Dijkstra, Bellman-Ford, and Floyd-Warshall algorithms, randomly select vertex pairs, output 3 shortest paths, visualize, and compare results with actual Google data.";
+    const doc = new Document({
+      sections: [
+        {
+          children: [
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: "Summary of the Document",
+                  bold: true,
+                  size: 28,
+                }),
+              ],
+              spacing: { after: 300 },
+            }),
+            ...summary.split("\n").map((line) =>
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: line,
+                    size: 24,
+                  }),
+                ],
+                spacing: { after: 200 },
+              })
+            ),
+          ],
+        },
+      ],
+    });
 
-    // Add a basic DOCX structure to the document with the hardcoded summary
-    const template = `
-      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-        <w:body>
-          <w:p>
-            <w:r>
-              <w:t>Summary of the Document</w:t>
-            </w:r>
-          </w:p>
-          <w:p>
-            <w:r>
-              <w:t>${hardcodedSummary}</w:t>
-            </w:r>
-          </w:p>
-        </w:body>
-      </w:document>
-    `;
-    zip.file("word/document.xml", template);
-
-    // Generate the DOCX file
-    const docBuffer = zip.generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
-    saveAs(docBuffer, "summary.docx");
+    const blob = await Packer.toBlob(doc);
+    saveAs(blob, "summary.docx");
   };
 
   return (
@@ -96,15 +123,21 @@ const TextSummarizer = () => {
             <input type="file" hidden onChange={handleUpload} />
           </Button>
 
-          <Button
-            variant="contained"
-            color="success"
-            fullWidth
-            sx={{ mt: 2 }}
-            onClick={handleSummarize}
-          >
-            Summarize
-          </Button>
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <Button
+              variant="contained"
+              color="success"
+              fullWidth
+              sx={{ mt: 2 }}
+              onClick={handleSummarize}
+            >
+              Summarize
+            </Button>
+          )}
         </Paper>
 
         <Paper elevation={3} sx={{ p: 2, width: "48%", ml: 2, display: "flex", flexDirection: "column" }}>
@@ -116,10 +149,10 @@ const TextSummarizer = () => {
           variant="outlined"
           fullWidth
           value={summary}
-          onChange={(e) => setSummary(e.target.value)} // Update summary state
+          onChange={(e) => setSummary(e.target.value)} 
         />
           <Typography variant="caption" display="block" sx={{ mt: 2 }}>
-            {text.split(".").filter((s) => s.trim().length > 0).length} sentences • {text.split(" ").filter((w) => w.trim().length > 0).length} words
+            {summary.length >0 ? summary.split(".").filter((s) => s.trim().length > 0).length : 0} sentences • {summary.length> 0 ? summary.split(" ").filter((w) => w.trim().length > 0).length: 0} words
           </Typography>
 
           <Button
