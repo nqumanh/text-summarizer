@@ -7,12 +7,17 @@ import { saveAs } from "file-saver";
 import axios from "axios";
 import CircularProgress from "@mui/material/CircularProgress";
 import { Document, Packer, Paragraph, TextRun } from "docx";
-
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import { jsPDF } from "jspdf";
 
 const TextSummarizer = () => {
   const [text, setText] = useState("");
   const [summary, setSummary] = useState(""); 
   const [loading, setLoading] = useState(false);
+  const [openDialog, setOpenDialog] = useState(false);
 
   const handleSummarize = async () => {
     if (!text.trim()) {
@@ -55,7 +60,41 @@ const TextSummarizer = () => {
     }
   };
 
-  const handleExport = async () => {
+    
+  const handleExportPDF = () => {
+    if (!summary.trim()) {
+      alert("No summary available to export.");
+        return;
+    }
+
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4",
+    });
+
+    doc.setFont("Times", "Normal");
+    doc.setFontSize(14);
+
+    const marginLeft = 20;
+    const lineHeight = 10;
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const textWidth = pageWidth - marginLeft * 2;
+
+    // Title
+    doc.setFontSize(18);
+    doc.text("Summary of the Document", marginLeft, 20);
+
+    // Reset font size
+    doc.setFontSize(14);
+
+    // Break text into lines that fit the page
+    const lines = doc.splitTextToSize(summary, textWidth);
+    doc.text(lines, marginLeft, 30); // Start writing from y=30
+
+    doc.save("summary.pdf");
+  };
+  const handleExportDOCX = async () => {
     if (!summary.trim()) {
       alert("No summary available to export.");
       return;
@@ -161,11 +200,23 @@ const TextSummarizer = () => {
             startIcon={<DownloadIcon />}
             fullWidth
             sx={{ mt: 2 }}
-            onClick={handleExport}
+            onClick={() => setOpenDialog(true)}
           >
             Export
           </Button>
         </Paper>
+
+        <Dialog open={openDialog} onClose={() => setOpenDialog(false)}>
+          <DialogTitle>Choose export format</DialogTitle>
+          <DialogContent>
+            <Typography>Would you like to export as DOCX or PDF?</Typography>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => { handleExportDOCX(); setOpenDialog(false); }}>DOCX</Button>
+            <Button onClick={() => { handleExportPDF(); setOpenDialog(false); }}>PDF</Button>
+            <Button onClick={() => setOpenDialog(false)} color="error">Cancel</Button>
+          </DialogActions>
+        </Dialog>
       </Box>
     </Box>
   );
