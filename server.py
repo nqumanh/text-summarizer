@@ -5,8 +5,7 @@ from flask_cors import CORS
 app = Flask(__name__)
 CORS(app)
 
-
-model_name = "t5-large"
+model_name = "t5-base"
 tokenizer = T5Tokenizer.from_pretrained(model_name)
 model = T5ForConditionalGeneration.from_pretrained(model_name)
 # model_name = "google/pegasus-large"
